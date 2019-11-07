@@ -121,7 +121,7 @@ class Repository():
 
 
     def students_table(self):
-        '''This creates a pretty table that is a Student Summary of each students CWID, Name, and their completed courses'''
+        '''This creates a pretty table that is a Student Summary of each students CWID, Name, their completed courses, their remaining required courses, and their remaining electives (if any)'''
         print('Student Summary')
         pt = PrettyTable(field_names = ['CWID', 'Name', 'Major', 'Completed Courses', 'Remaining Required', 'Remaining Electives']) #The top field names for the table
         for student in self._students.values(): 
