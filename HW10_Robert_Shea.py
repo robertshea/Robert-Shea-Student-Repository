@@ -3,6 +3,28 @@ Code Purpose: The purpose of this code is to create a data repository of courses
 from collections import defaultdict
 from prettytable import PrettyTable
 
+def file_reading_gen(path, fields, sep='\t', header=False):
+    '''This is a generator function that will read field separated text files and yield a tuple with all of the values from a single line in the file on each call to next()'''
+    file_name = path
+    try: #This tries to open the file and returns an error if it can not open the file. The code continues if opening the file is successful
+        fp = open(file_name,'r')
+
+    except FileNotFoundError:
+        raise FileNotFoundError(f"Can't open {file_name}!")
+
+    else:
+
+        with fp:
+            for offset, line in enumerate(fp): #Iterates through all the lines in the file and stores an offset value for each line
+                separate_line = line.rstrip('\n').split(sep) #Separates the line based on the indicated separator. In this case it is '\t'
+                if len(separate_line) != fields: #Checks that the length of the seperated line is the same as the amount of indicated fields and raises an error if not
+                    raise ValueError(f'{file_name} in line {offset} has {len(separate_line)} but expected {fields}')
+                elif header is True:
+                    header = False
+                    continue
+                else:
+                    yield tuple(separate_line)
+
 class Repository():
     '''This class will hold all of the information for a specific university. It holds student, major, and professor. For students this includes classes taken and grades achieved.'''
 
@@ -10,132 +32,57 @@ class Repository():
         self._university = university
         self._students = dict()
         self._instructors = dict()
-        self._majors = defaultdict(Major)
+        self._majors = dict()
     
-    def read_students_file(self, path, fields=3, sep=';', header=True):
+    def read_students_file(self, path):
         '''Reads the student file to pull out the appropriate information.'''
-        file_name = path
         try:
-            fp = open(file_name, 'r')
-        except FileNotFoundError:
-            raise FileNotFoundError(f"Can't open {file_name}!")
-        else:
-            with fp:
-                    for offset, line in enumerate(fp): #Iterates through all the lines in the file and stores an offset value for each line
-                        separate_line = line.rstrip('\n').split(sep) #Separates the line based on the indicated separator. In this case it is ';'
-                        if len(separate_line) != fields: #Checks that the length of the seperated line is the same as the amount of indicated fields and raises an error if not
-                            raise ValueError(f'{file_name} in line {offset} has {len(separate_line)} but expected {fields}')
-                        elif header is True: #Checks that the first line is a header and does not evaluate it if so
-                            header = False
-                            continue
-                        else:
-                            self._students[separate_line[0]] = Student(separate_line[0], separate_line[1], separate_line[2]) #Each new instance of student is appended to the dict
+            for cwid, name, major in file_reading_gen(path, 3, sep=';', header=True):
+                self._students[cwid] = Student(cwid, name, major, self._majors[major]) #Each new instance of student is appended to the dict
+        except ValueError as VE:
+            print(VE)
 
-    def read_instructors_file(self, path, fields=3, sep='|', header=True):
+    def read_instructors_file(self, path):
         '''Reads the instructors file to pull out the appropriate information'''
-        file_name = path
         try:
-            fp = open(file_name, 'r')
-        
-        except FileNotFoundError:
-            raise FileNotFoundError(f"Can't open {file_name}!")
+            for cwid, name, dept in file_reading_gen(path, 3, sep='|', header=True):
+                self._instructors[cwid] = Instructor(cwid, name, dept) #Each new instance of instructor is appended to the dict
+        except ValueError as VE:
+            print(VE)
 
-        else:
-            with fp:
-                    for offset, line in enumerate(fp): #Iterates through all the lines in the file and stores an offset value for each line
-                        separate_line = line.rstrip('\n').split(sep) #Separates the line based on the indicated separator. In this case it is '|'
-                        if len(separate_line) != fields: #Checks that the length of the seperated line is the same as the amount of indicated fields and raises an error if not
-                            raise ValueError(f'{file_name} in line {offset} has {len(separate_line)} but expected {fields}')
-                        elif header is True: #Checks that the first line is a header and does not evaluate it if so
-                            header = False
-                            continue
-                        else:
-                            self._instructors[separate_line[0]] = Instructor(separate_line[0], separate_line[1], separate_line[2]) #Each new instance of instructor is appended to the dict
-
-    def read_grades_file(self, path, fields=4, sep='|', header=True):
+    def read_grades_file(self, path):
         '''Reads the grades file to pull out the appropriate information'''
-        file_name = path
         try:
-            fp = open(file_name, 'r')
-        
-        except FileNotFoundError:
-            raise FileNotFoundError(f"Can't open {file_name}!")
-        else:
-            with fp:
-                    for offset, line in enumerate(fp): #Iterates through all the lines in the file and stores an offset value for each line
-                        separate_line = line.rstrip('\n').split(sep) #Separates the line based on the indicated separator. In this case it is '|'
-                        if len(separate_line) != fields: 
-                            raise ValueError(f'{file_name} in line {offset} has {len(separate_line)} but expected {fields}')
-                        elif header is True: #Checks that the first line is a header and does not evaluate it if so
-                            header = False
-                            continue
-                        else:
-                            _grades_student = separate_line[0]
-                            _course = separate_line[1]
-                            _grade = separate_line[2]
-                            _grades_instructor = separate_line[3]
-                        if _grades_student in self._students:
-                            self._students[_grades_student].add_course(_course, _grade)
-                        else: 
-                            print(f'Found grade for unknown student {_grades_student}')
-                        if _grades_instructor in self._instructors:
-                            self._instructors[_grades_instructor].num_students(_course)
-                        else: 
-                            print(f'Found an unknown instructor {_grades_instructor}')
-    
-    def read_majors_file(self, path, fields=3, sep='\t', header=True):
-        file_name = path
+            for _grades_student, _course, _grade, _grades_instructor in file_reading_gen(path, 4, sep='|', header=True):
+                if _grades_student in self._students:
+                    self._students[_grades_student].add_course(_course, _grade)
+                else: 
+                    print(f'Found grade for unknown student {_grades_student}')
+                if _grades_instructor in self._instructors:
+                    self._instructors[_grades_instructor].num_students(_course)
+                else: 
+                    print(f'Found an unknown instructor {_grades_instructor}')
+        except ValueError as VE:
+            print(VE)
+
+    def read_majors_file(self, path):
         try:
-            fp = open(file_name, 'r')
-        
-        except FileNotFoundError:
-            raise FileNotFoundError(f"Can't open {file_name}!")
-
-        else:
-            with fp:
-                    for offset, line in enumerate(fp): #Iterates through all the lines in the file and stores an offset value for each line
-                        separate_line = line.rstrip('\n').split(sep) #Separates the line based on the indicated separator. In this case it is '\t'
-                        if len(separate_line) != fields: #Checks that the length of the seperated line is the same as the amount of indicated fields and raises an error if not
-                            raise ValueError(f'{file_name} in line {offset} has {len(separate_line)} but expected {fields}')
-                        elif header is True: #Checks that the first line is a header and does not evaluate it if so
-                            header = False
-                            continue
-                        else:
-                            dept, req_or_elect, course = separate_line[0], separate_line[1], separate_line[2]
-                            self._majors[dept].add_courses(req_or_elect, course) #Adds the department as a key to the _majors dictionary with keys that are the course and whether it is required or an elective
+            for dept, req_or_elect, course in file_reading_gen(path, 3, sep='\t', header=True):
+                if dept in self._majors:
+                    self._majors[dept].add_courses(req_or_elect, course)
+                else:
+                    self._majors[dept] = Major(dept)
+                    self._majors[dept].add_courses(req_or_elect, course) #Adds the department as a key to the _majors dictionary with keys that are the set of required courses or elective courses
+        except ValueError as VE:
+            print(VE)
     
-    def courses_remaining(self,student):
-        '''This is a function to determine the remaining courses that need to be taken'''
-        required_class = self._majors[student._major]._required_courses
-        elective_class = self._majors[student._major]._elective_courses
-        passing_grades = ['A', 'A-', 'B+', 'B', 'B-', 'C+', 'C'] #Values that will be compared to as a passing grade for a course
-        courses_passed = set() 
-        
-        for course,grade in student._courses.items():
-            if grade in passing_grades: #If the student grade in the class is in the list of passing grades, then they passed the course and it is added to a set
-                courses_passed.add(course)
-        if any(elective_class.intersection(courses_passed)) == True: #If the set that includes the courses passed and the list of courses that are electives have any classes in common, then the student has taken the required amount of electives and the electives remaining is none
-            electives_remaining = []
-        else: 
-            electives_remaining = elective_class
-            ''' required_class.difference(courses_passed) will give the difference between the list of courses that are required and the list of required courses that the student has passed.
-            The difference is the remaining required courses that the student still has to take'''
-        return(courses_passed, required_class.difference(courses_passed), electives_remaining)
-
 
     def students_table(self):
-        '''This creates a pretty table that is a Student Summary of each students CWID, Name, and their completed courses'''
+        '''This creates a pretty table that is a Student Summary of each students CWID, Name, their completed courses, their remaining required courses and their remaining electives'''
         print('Student Summary')
         pt = PrettyTable(field_names = ['CWID', 'Name', 'Major', 'Completed Courses', 'Remaining Required', 'Remaining Electives']) #The top field names for the table
         for student in self._students.values(): 
-            '''I was not sure how else to do this but I have the information for the students courses_passed, required_remaining, and elective_remaining that are from the repository.
-            I made a list of the elements that are in student.pt_row(). Then I sorted and appended each element to the list.'''
-            courses_passed, required_remaining, electives_remaining = self.courses_remaining(student)
-            lst = student.pt_row()
-            lst.append(sorted(courses_passed))
-            lst.append(sorted(required_remaining))
-            lst.append(sorted(electives_remaining))
-            pt.add_row(lst)
+            pt.add_row(student.pt_row())
         print(pt)
     
     def instructors_table(self):
@@ -151,8 +98,8 @@ class Repository():
         '''This creates a pretty table that is a Majors Summary of each department, the departments required courses, and the departments required electives'''
         print('Majors Summary')
         pt = PrettyTable(field_names = ['Dept', 'Required', 'Electives'])
-        for major in self._majors.keys():
-            pt.add_row([major, sorted(self._majors[major]._required_courses), sorted(self._majors[major]._elective_courses)])
+        for major in self._majors.values():
+            pt.add_row(major.pt_row())
         print(pt)
 
     def pt_dict_students(self): #This is a dictionary with keys of the student CWID and values that correspond to the pretty table row for that CWID
@@ -171,18 +118,20 @@ class Repository():
         
 class Student():
     '''This class stores all the student data'''
-    def __init__(self, CWID, name, major):
+    def __init__(self, CWID, name, major_name, major):
         self._CWID = CWID
         self._name = name
+        self._major_name = major_name
         self._major = major
         self._courses = dict() #This dictionary will have a key as the course number and a value as the grade
 
     def add_course(self, course, grade='N/A'):
         self._courses[course] = grade
 
-
     def pt_row(self):
-        return [self._CWID, self._name, self._major]  #The completed courses in the pretty table are sorted in alphabetical order by course name and numerical order by course number
+
+        courses_passed, required_remaining, electives_remaining = self._major.courses_remaining(self._courses)
+        return [self._CWID, self._name, self._major_name, sorted(list(courses_passed)), required_remaining, electives_remaining]  #The completed courses in the pretty table are sorted in alphabetical order by course name and numerical order by course number
 
 
 
@@ -205,9 +154,11 @@ class Instructor():
 
 class Major():
     '''This class stores the majors data'''
-    def __init__(self):
+    def __init__(self, dept):
+        self.dept = dept
         self._required_courses = set()
         self._elective_courses = set()
+
     
     def add_courses(self, req_or_elect, course):
         '''If the "flag" starts with an "R" then it is a required course and if it starts with an "E" then it is an elective and will be stored in the dictionary _majors as such.
@@ -218,17 +169,31 @@ class Major():
             self._elective_courses.add(course)
         else:
             raise ValueError(f'Expected "R" or "E" but instead encountered {req_or_elect} in majors.txt')
+
+    def courses_remaining(self, student):
+        '''This is a function to determine the remaining courses that need to be taken'''
+        passing_grades = {'A', 'A-', 'B+', 'B', 'B-', 'C+', 'C'} #Values that will be compared to as a passing grade for a course
+        courses_passed = {course for course, grade in student.items() if grade in passing_grades}
+
+        if any(self._elective_courses.intersection(courses_passed)) == True: #If the set that includes the courses passed and the list of courses that are electives have any classes in common, then the student has taken the required amount of electives and the electives remaining is none
+            electives_remaining = []
+        else: 
+            electives_remaining = self._elective_courses
+            ''' required_class.difference(courses_passed) will give the difference between the list of courses that are required and the list of required courses that the student has passed.
+            The difference is the remaining required courses that the student still has to take'''
+        return(courses_passed, self._required_courses.difference(courses_passed), electives_remaining)
     
     def pt_row(self):
-        return [Major, self._required_courses, self._elective_courses]
+        return [self.dept, self._required_courses, self._elective_courses]
 
 def main():
     Stevens = Repository('Stevens')
 
-    Stevens.read_students_file('HW10_students.txt',fields=3, sep=';', header=True)
-    Stevens.read_instructors_file('instructors2.txt',fields=3, sep='|', header=True)
-    Stevens.read_grades_file('grades2.txt',fields=4, sep='|', header=True)
-    Stevens.read_majors_file('majors.txt',fields=3, sep='\t', header=True)
+
+    Stevens.read_majors_file('majors.txt')
+    Stevens.read_students_file('HW10_students.txt')
+    Stevens.read_instructors_file('instructors2.txt')
+    Stevens.read_grades_file('grades2.txt')
 
     Stevens.majors_table()
 
